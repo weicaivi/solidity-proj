@@ -6,43 +6,40 @@ import "./BasicDepositBox.sol";
 import "./PremiumDepositBox.sol";
 import "./TimeLockedDepositBox.sol";
 
-contract VaultManager{
-
+contract VaultManager {
     mapping(address => address[]) private userDepositBoxes;
-    mapping(address => string)private boxNames;
+    mapping(address => string) private boxNames; // box address -> name
 
-    event BoxCreated(address indexed owner, address indexed boxAdress, string boxType);
-    event BoxNamed(address indexed boxAdress, string name);
+    event BoxCreated(address indexed owner, address indexed boxAddress, string boxType);
+    event BoxNamed(address indexed boxAddress, string name);
 
-    function createBasicBox() external returns (address){
-
+    function createBasixBox() external returns (address) {
         BasicDepositBox box = new BasicDepositBox();
         userDepositBoxes[msg.sender].push(address(box));
         emit BoxCreated(msg.sender, address(box), "Basic");
         return address(box);
     }
 
-    function createPremiumBox() external returns (address){
-
+    function createPremiumBox() external returns (address) {
         PremiumDepositBox box = new PremiumDepositBox();
         userDepositBoxes[msg.sender].push(address(box));
         emit BoxCreated(msg.sender, address(box), "Premium");
         return address(box);
     }
 
-    function createTimeLockedBox(uint256 lockDuration) external returns (address){
+    function createTimeLockedBox(uint256 lockDuration) external returns (address) {
         TimeLockedDepositBox box = new TimeLockedDepositBox(lockDuration);
         userDepositBoxes[msg.sender].push(address(box));
         emit BoxCreated(msg.sender, address(box), "Time Locked");
         return address(box);
     }
 
-    function nameBox(address boxAddress, string memory name ) external{
+    function nameBox(address boxAddress, string memory name) external {
+        // Operates via IDepositBox interface, no need to know concrete type
         IDepositBox box = IDepositBox(boxAddress);
         require(box.getOwner() == msg.sender, "Not the box owner");
         boxNames[boxAddress] = name;
         emit BoxNamed(boxAddress, name);
-
     }
 
     function storeSecret(address boxAddress, string calldata secret) external{
@@ -51,27 +48,35 @@ contract VaultManager{
         box.storeSecret(secret);
     }
 
-    function transferBoxOwnership(address boxAddress, address newOwner)  external{
+    function transferBoxOwnership(address boxAddress, address newOwner) external {
         IDepositBox box = IDepositBox(boxAddress);
         require(box.getOwner() == msg.sender, "Not the box owner");
+
+        // Update the actual box's owner
         box.transferOwnership(newOwner);
+
+        // Remove from sender's list (swap-and-pop)
         address[] storage boxes = userDepositBoxes[msg.sender];
-        for(uint i = 0; i < boxes.length; i++){
-            boxes[i] = boxes[boxes.length - 1];
-            boxes.pop();
-            break;
+        for (uint256 i = 0; i < boxes.length; i++) {
+            if (boxes[i] == boxAddress) {
+                boxes[i] = boxes[boxes.length - 1]; // move last to current index
+                boxes.pop();                        // remove last
+                break;
+            }
         }
+
+        // Add to new owner's list
         userDepositBoxes[newOwner].push(boxAddress);
-      
     }
+
 
     function getUserBoxes(address user) external view returns(address[] memory){
         return userDepositBoxes[user];
     }
 
     function getBoxName(address boxAddress) external view returns (string memory) {
-    return boxNames[boxAddress];
-}
+        return boxNames[boxAddress];
+    }
 
     function getBoxInfo(address boxAddress)external view returns(
         string memory boxType,
@@ -87,5 +92,4 @@ contract VaultManager{
             boxNames[boxAddress]
         );
     }
-
 }
